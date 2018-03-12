@@ -1,0 +1,7 @@
+{
+    "REPORT_SIZE": 1000,
+    "REPORT_DIR": "./reports",
+    "LOG_DIR": "./log",
+    "TS_FILE": "log_analyzer.ts",
+    "SCRIPT_LOG": "log_analyzer.log"
+}
