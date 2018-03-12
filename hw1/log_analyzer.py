@@ -97,17 +97,20 @@ def CheckReportExistance(REPORT_DIR):
     try:
         report_list_dict = {}
         re_string = re.compile("(?P<filename>report-(?P<year>[0-9]{4}).(?P<month>0[1-9]|1[1,2]).(?P<day>[0-2][1-9]|3[0-1])\.html)")
-        for l in os.listdir(REPORT_DIR):
-            m = re_string.match(l)
-            if m is not None:
-                report_list_dict[m.group("filename")] = date(int(m.group("year")), int(m.group("month")), int(m.group("day")))
-        if len(report_list_dict) == 0:
-            last_report_date = None
-            Logger.info("I didn't find the latest report.")
-        else:
-            last_report_date = max([v for k, v in report_list_dict.items()])
-            Logger.info("Report found. The date of the report is {}.".format(last_report_date))
-        return last_report_date
+        if os.path.exists(REPORT_DIR):
+            for l in os.listdir(REPORT_DIR):
+                m = re_string.match(l)
+                if m is not None:
+                    report_list_dict[m.group("filename")] = date(int(m.group("year")), int(m.group("month")), int(m.group("day")))
+            if len(report_list_dict) == 0:
+                last_report_date = None
+                Logger.info("I didn't find the latest report.")
+            else:
+                last_report_date = max([v for k, v in report_list_dict.items()])
+                Logger.info("Report found. The date of the report is {}.".format(last_report_date))
+            return last_report_date
+        os.path.makedirs(REPORT_DIR)
+        return None
     except:
         Logger.exception("Undefined error in function {}".format(inspect.stack()[0][3]))
 
