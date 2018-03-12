@@ -39,12 +39,12 @@ The program can specify where the configuration file in **[json format](https://
 
 How to run
 ----------
-*python log_analyser.py*
+*python log_analyzer.py*
 
 **OR**
 
-*python log_analyser.py --config <your_config_file_name.json>*
+*python log_analyzer.py --config <your_config_file_name.json>*
 
 **SIMPLER**
 
-*python log_analyser.py -c <your_config_file_name.json>*
+*python log_analyzer.py -c <your_config_file_name.json>*
