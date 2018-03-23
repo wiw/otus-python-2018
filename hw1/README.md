@@ -27,7 +27,8 @@ The program can specify where the configuration file in **[json format](https://
     "REPORT_DIR": "./reports",
     "LOG_DIR": "./log",
     "TS_FILE": "log_analyzer.ts",
-    "SCRIPT_LOG": "log_analyzer.log"
+    "SCRIPT_LOG": "log_analyzer.log",
+    "ERR_THRS": 1000
 }
 ```
 
@@ -36,6 +37,8 @@ The program can specify where the configuration file in **[json format](https://
     Path to *timestamp* file
 * *"SCRIPT_LOG": "log_analyzer.log"*
     Path to working *log file*
+* *"ERR_THRS": 1000*
+    Threshold for parsing error
 
 How to run
 ----------

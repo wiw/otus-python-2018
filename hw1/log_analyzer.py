@@ -15,12 +15,14 @@ config = {
     "REPORT_SIZE": 1000,
     "REPORT_DIR": "./reports",
     "LOG_DIR": "./log",
+    "TS_FILE": "/var/tmp/log_analyzer.ts",
+    "ERR_THRS": 1000
 }
 
 Logger = logging.getLogger(__name__)
 
 # Definition arguments and write config
-def ParseArguments():
+def parse_arguments():
     try:
         p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
         p.add_argument("--config", "-c", default='./config.json', help="Please typing path to config file")
@@ -30,7 +32,7 @@ def ParseArguments():
         Logger.exception("Undefined error to parse arguments!")
     return args
 
-def LoadConfig(PATH_TO_CONFIG_FILE):
+def load_config(PATH_TO_CONFIG_FILE):
     try:
         with open(PATH_TO_CONFIG_FILE, 'rb') as js:
             loaded_config = json.load(js)
@@ -44,36 +46,33 @@ def LoadConfig(PATH_TO_CONFIG_FILE):
         Logger.exception("Doesn't correct config file!")
 
 # Open&Collect, Parsing functions
-def openLog(f):
+def open_log(f):
     try:
-        if f[-2:] == 'gz':
+        if f.endswith('gz'):
             return gzip.open(f, 'rb')
         return open(f, 'rb')
     except:
         Logger.exception("Opener error!")
 
-def CollectLines(input_file):
-    all_lines = float(sum(1 for line in openLog(input_file)))
-    parse_error_threshold = 0.5
-    parse_error, line_count = 0.0, 0.0
-    with openLog(input_file) as handle:
+def collect_lines(input_file):
+    parse_error, line_count = 0, 0
+    with open_log(input_file) as handle:
         log_dict = {}
         for line in handle:
-            line_count += 1.0
-            url, rqst = ParseLog(line)
-            if url == 1 and rqst == 1:
-                parse_error += 1.0
-            if parse_error / all_lines >= parse_error_threshold:
-                processed_lines = line_count / all_lines
-                Logger.error("The relative threshold of parsing errors is exceeded! Percent of processed lines: {}. Exit.".format(processed_lines))
+            line_count += 1
+            result = parse_log(line)
+            if result is None:
+                parse_error += 1
+            if parse_error >= config["ERR_THRS"]:
+                Logger.error("The threshold of parsing errors is exceeded! Numbers of processed lines: {}. Exit.".format(line_count))
                 exit(0)
-            if log_dict.get(url) is None: log_dict[url] = []
-            log_dict[url].append(float(rqst))
-    return log_dict, all_lines
+            if log_dict.get(result[0]) is None: log_dict[result[0]] = []
+            log_dict[result[0]].append(float(result[1]))
+    return log_dict, line_count
 
-def parseLogFilesList(LOG_DIR, REPORT_DIR):
+def parse_log_files_list(LOG_DIR, REPORT_DIR):
     file_list_dict = {}
-    last_report_date = CheckReportExistance(REPORT_DIR)
+    last_report_date = check_report_existance(REPORT_DIR)
     re_string = re.compile("(?P<file>nginx-access-ui\.log-(?P<year>[0-9]{4})(?P<month>0[1-9]|1[1,2])(?P<day>[0-2][1-9]|3[0-1])(\.gz|))")
     for f in os.listdir(LOG_DIR):
         m = re_string.match(f)
@@ -93,7 +92,7 @@ def parseLogFilesList(LOG_DIR, REPORT_DIR):
             Logger.info("The file '{}' for processing was successfully found.".format(input_file))
             return input_file, last_date
 
-def CheckReportExistance(REPORT_DIR):
+def check_report_existance(REPORT_DIR):
     try:
         report_list_dict = {}
         re_string = re.compile("(?P<filename>report-(?P<year>[0-9]{4}).(?P<month>0[1-9]|1[1,2]).(?P<day>[0-2][1-9]|3[0-1])\.html)")
@@ -114,13 +113,12 @@ def CheckReportExistance(REPORT_DIR):
     except:
         Logger.exception("Undefined error in function {}".format(inspect.stack()[0][3]))
 
-def ParseLog(line):
+def parse_log(line):
     try:
         line = re.split('\"', line[:-2])
-        url, rqst = line[1].split(" ")[1], line[12][1:]
+        return (line[1].split(" ")[1], line[12][1:])
     except:
-        url, rqst = 1, 1
-    return url, rqst
+        return None
 
 # Statistics functions
 def median(numbers):
@@ -141,12 +139,12 @@ def mean(numbers):
         Logger.exception("Undefined error in function {}".format(inspect.stack()[0][3]))
 
 # Report generators
-def MakeTableJson(LOG_DIR, REPORT_DIR):
-    input_file, last_date = parseLogFilesList(LOG_DIR, REPORT_DIR)
+def make_json_table(LOG_DIR, REPORT_DIR):
+    input_file, last_date = parse_log_files_list(LOG_DIR, REPORT_DIR)
     if input_file is None or last_date is None:
         Logger.info("No file for processing. Exit.")
         exit(0)
-    log_dict, all_lines = CollectLines(input_file)
+    log_dict, all_lines = collect_lines(input_file)
     sum_rqst = sum(list(itertools.chain(*[v for k, v in log_dict.items()])))
     table_json = []
     for url, rqst in log_dict.items():
@@ -157,12 +155,12 @@ def MakeTableJson(LOG_DIR, REPORT_DIR):
             "time_sum": round(sum(rqst), 3), 
             "url": url, 
             "time_med": round(median(rqst), 3), 
-            "time_perc": round((float(sum(rqst)) / sum_rqst) * 100, 3), 
-            "count_perc": round((float(len(rqst)) / all_lines) * 100, 3)})
+            "time_perc": round((float(sum(rqst)) / float(sum_rqst)) * 100, 3), 
+            "count_perc": round((float(len(rqst)) / float(all_lines)) * 100, 3)})
     table_json = sorted(table_json, key=lambda k: k['time_sum'], reverse=True)[:config['REPORT_SIZE']]
     return table_json, last_date
 
-def WriteReport(table_json, last_date):
+def write_report(table_json, last_date):
     try:
         if os.path.exists('report.html') and os.path.isfile('report.html'):
             with open('report.html', 'rb') as handle:
@@ -177,24 +175,25 @@ def WriteReport(table_json, last_date):
     except:
         Logger.exception("Input/Output error")
 
-def SuccessReport():
-    path_to_ts = "/var/tmp/log_analyzer.ts"
-    if config.get("TS_FILE") is not None:
-        if not os.path.exists(os.path.dirname(config.get("TS_FILE"))): os.path.makedirs(os.path.dirname(config.get("TS_FILE")))
-        path_to_ts = config["TS_FILE"]
-    with open(path_to_ts, "a") as ts:
-        ts.write(datetime.now().__format__("%Y.%m.%d %X") + "\n")
+def make_success_report():
+    try:
+        if not os.path.exists(os.path.dirname(config.get("TS_FILE"))):
+            os.path.makedirs(os.path.dirname(config.get("TS_FILE")))
+        with open(config.get("TS_FILE"), "a") as ts:
+            ts.write(datetime.now().__format__("%Y.%m.%d %X") + "\n")
+    except:
+        Logger.exception("Undefined error in function {}".format(inspect.stack()[0][3]))
 
 def main(args):
-    config = LoadConfig(args.config)
-    table_json, last_date = MakeTableJson(config["LOG_DIR"], config["REPORT_DIR"])
+    config = load_config(args.config)
+    table_json, last_date = make_json_table(config["LOG_DIR"], config["REPORT_DIR"])
     if table_json is None or last_date is None:
         Logger.info("No file for processing. Exit.")
         exit(0)
-    WriteReport(table_json, last_date)
+    write_report(table_json, last_date)
     Logger.info("The log file was successfully processed.")
-    SuccessReport()
+    make_success_report()
 
 if __name__ == "__main__":
-    args = ParseArguments()
+    args = parse_arguments()
     main(args)
