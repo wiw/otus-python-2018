@@ -60,7 +60,7 @@ def collect_lines(input_file):
         log_dict = {}
         for line in handle:
             line_count += 1
-            result = parse_log(line)
+            result = parse_logs_line(line)
             if result is None:
                 parse_error += 1
             if parse_error >= config["ERR_THRS"]:
@@ -70,7 +70,7 @@ def collect_lines(input_file):
             log_dict[result[0]].append(float(result[1]))
     return log_dict, line_count
 
-def parse_log_files_list(LOG_DIR, REPORT_DIR):
+def select_log_file(LOG_DIR, REPORT_DIR):
     file_list_dict = {}
     last_report_date = check_report_existance(REPORT_DIR)
     re_string = re.compile("(?P<file>nginx-access-ui\.log-(?P<year>[0-9]{4})(?P<month>0[1-9]|1[1,2])(?P<day>[0-2][1-9]|3[0-1])(\.gz|))")
@@ -113,12 +113,21 @@ def check_report_existance(REPORT_DIR):
     except:
         Logger.exception("Undefined error in function {}".format(inspect.stack()[0][3]))
 
-def parse_log(line):
-    try:
-        line = re.split('\"', line[:-2])
-        return (line[1].split(" ")[1], line[12][1:])
-    except:
-        return None
+def parse_logs_line(line):
+    line = re.split('\"', line)
+    url_expr = re.compile("(GET|POST) (?P<url>.*)")
+    time_rqst_expr = re.compile(" (?P<time_rqst>[0-9].*\.[0-9]{3})")
+    parse_result = []
+    for element in line:
+        url_m = url_expr.match(element)
+        time_rqst_m = time_rqst_expr.match(element)
+        if url_m is not None:
+            parse_result.append(url_m.group("url"))
+        if time_rqst_m is not None:
+            parse_result.append(time_rqst_m.group("time_rqst"))
+    if len(parse_result) == 2:
+        return tuple(parse_result)
+    return None
 
 # Statistics functions
 def median(numbers):
@@ -139,8 +148,8 @@ def mean(numbers):
         Logger.exception("Undefined error in function {}".format(inspect.stack()[0][3]))
 
 # Report generators
-def make_json_table(LOG_DIR, REPORT_DIR):
-    input_file, last_date = parse_log_files_list(LOG_DIR, REPORT_DIR)
+def make_log_table(LOG_DIR, REPORT_DIR):
+    input_file, last_date = select_log_file(LOG_DIR, REPORT_DIR)
     if input_file is None or last_date is None:
         Logger.info("No file for processing. Exit.")
         exit(0)
@@ -186,7 +195,7 @@ def make_success_report():
 
 def main(args):
     config = load_config(args.config)
-    table_json, last_date = make_json_table(config["LOG_DIR"], config["REPORT_DIR"])
+    table_json, last_date = make_log_table(config["LOG_DIR"], config["REPORT_DIR"])
     if table_json is None or last_date is None:
         Logger.info("No file for processing. Exit.")
         exit(0)
